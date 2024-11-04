@@ -1,14 +1,39 @@
-from rest_framework import filters
-from rest_framework.viewsets import ModelViewSet
+from rest_framework.generics import CreateAPIView, ListAPIView, UpdateAPIView
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import OrderingFilter
+from users.models import Payment, User
+from users.serializers import PaymentSerializer, UserSerializer
 
-from users.models import Payments
-from users.serializers import PaymentsSerializer
+
+class UserCreateAPIView(CreateAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+
+    def perform_create(self, serializer):
+        user = serializer.save(is_active=True)
+        user.set_password(user.password)
+        user.save()
 
 
-class PaymentViewSet(ModelViewSet):
-    queryset = Payments.objects.all()
-    serializer_class = PaymentsSerializer
-    filter_backends = [filters.OrderingFilter, filters.SearchFilter]
-    ordering_fields = ('payment_time', 'price',)
-    search_fields = ('payment_method',)
-    filterset_fields = ('payment_time', 'payment_course', 'payment_lesson', 'payment_method',)
+class UserListAPIView(ListAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+
+
+class UserUpdateAPIView(UpdateAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+
+
+class PaymentListAPIView(ListAPIView):
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = ('paid_lesson', 'paid_course', 'payment_type',)
+    ordering_fields = ('date',)
+
+
+class PaymentCreateAPIView(CreateAPIView):
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    

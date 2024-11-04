@@ -1,35 +1,31 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
-
 from materials.models import Course, Lesson
 
 
 class User(AbstractUser):
     username = None
-    email = models.EmailField(unique=True, verbose_name="Почта", help_text="Укажите почту", )
+    email = models.EmailField(unique=True, verbose_name="Email")
     phone = models.CharField(
-        max_length=50,
+        max_length=35,
         verbose_name="Телефон",
-        help_text="Укажите номер телефона",
         blank=True,
         null=True,
+        help_text="Введите номер телефона",
     )
     avatar = models.ImageField(
-        upload_to="users/image",
+        upload_to="users/avatars",
         blank=True,
         null=True,
-        verbose_name="Фото",
-        help_text="Загрузите фотографию",
+        verbose_name="Аватар",
+        help_text="Загрузите аватар",
     )
-    country = models.CharField(
-        max_length=50,
-        verbose_name="Страна",
-        help_text="Укажите страну",
+    city = models.CharField(
+        max_length=35,
+        verbose_name="Город",
         blank=True,
         null=True,
-    )
-    token = models.CharField(
-        max_length=100, verbose_name="Тоken", null=True, blank=True
+        help_text="Укажите город",
     )
 
     USERNAME_FIELD = "email"
@@ -39,59 +35,52 @@ class User(AbstractUser):
         verbose_name = "Пользователь"
         verbose_name_plural = "Пользователи"
 
-    def __str__(self):
-        return self.email
 
-
-class Payments(models.Model):
-    CASH = "cash"
-    NON_CASH = "non_cash"
-    PAYMENT_OPTIONS = (
-        (CASH, 'Наличный'),
-        (NON_CASH, 'Безналичный')
-    )
+class Payment(models.Model):
+    payment_choices = {
+        'Cash': "наличные",
+        'Transfer': "перевод ",
+    }
     user = models.ForeignKey(
         User,
-        on_delete=models.SET_NULL,
-        blank=True,
-        null=True,
+        on_delete=models.CASCADE,
+        verbose_name="Пользователь",
         related_name='user'
     )
-    payment_time = models.DateTimeField(
-        verbose_name="Дата оплаты",
-        help_text="Введите дату",
+    date = models.DateTimeField(
         auto_now_add=True,
-        blank=True,
-        null=True,
+        verbose_name='Дата'
     )
-    payment_course = models.ForeignKey(
+    paid_course = models.ForeignKey(
         Course,
         on_delete=models.CASCADE,
+        verbose_name='Оплаченный курс',
         blank=True,
         null=True,
-        verbose_name="Оплаченный курс"
+        related_name='paid_course'
     )
-    payment_lesson = models.ForeignKey(
+    paid_lesson = models.ForeignKey(
         Lesson,
         on_delete=models.CASCADE,
+        verbose_name='Оплаченный урок',
         blank=True,
         null=True,
-        verbose_name="Оплаченный урок"
+        related_name='paid_lesson'
     )
-    price = models.PositiveIntegerField(
-        default=0,
-        verbose_name="Стоимость покупки"
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
     )
-    payment_method = models.CharField(
-        max_length=20,
-        choices=PAYMENT_OPTIONS,
-        default=CASH,
-        verbose_name='Способ оплаты'
+    payment_type = models.CharField(
+        max_length=50,
+        choices=payment_choices,
+        verbose_name='тип оплаты'
     )
 
     class Meta:
-        verbose_name = "Оплата"
-        verbose_name_plural = "Оплаты"
+        verbose_name = "Платеж"
+        verbose_name_plural = "Платежи"
+        ordering = ['-date']
 
     def __str__(self):
-        return self.payment_method
+        return f'Пользователь {self.user} оплатил {self.amount}'
