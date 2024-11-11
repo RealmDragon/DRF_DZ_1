@@ -1,51 +1,77 @@
-
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveAPIView, UpdateAPIView, DestroyAPIView
 from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.filters import SearchFilter
 from rest_framework.permissions import AllowAny
-# from rest_framework.viewsets import ModelViewSet
-
-from users.models import Payments, User
-from users.serializers import PaymentsSerializer, UserSerializer, PaymentSerializer
-from users.services import convert_rub_to_dol, create_stripe_price, create_stripe_session, create_stripe_product
-
-
-class PaymentsListApiView(ListAPIView):
-    queryset = Payments.objects.all()
-    serializer_class = PaymentsSerializer
+from rest_framework.viewsets import ModelViewSet
+from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveAPIView, UpdateAPIView, DestroyAPIView
+from rest_framework import filters, serializers
+from users.models import User, Pay
+from users.serializer import UserSerializer, PaySerializer
+from users.services import create_stripe_session, create_stripe_product, create_stripe_price
 
 
-    # filter_backends = [DjangoFilterBackend]
-    # filterset_fields = ["payment_method"]
+class PayViewSet(ModelViewSet):
+    queryset = Pay.objects.all()
+    serializer_class = PaySerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ('payed_course', 'payed_lesson', 'type_of_payment')
+    ordering_fields = ('date',)
 
-    filter_backends = [SearchFilter, OrderingFilter]
-    search_fields = ["payment_method"]
-    ordering_fields = ["payments_date"]
 
-
-class UserCreateAPIView(CreateAPIView):
-    serializer_class = UserSerializer
+class UserCreateApiView(CreateAPIView):
     queryset = User.objects.all()
+    serializer_class = UserSerializer
     permission_classes = (AllowAny,)
 
     def perform_create(self, serializer):
-        user = serializer.save(is_active=True)
-        user.set_password(user.password)
+        user = serializer.save()
+        user.set_password(self.request.data.get('password'))
         user.save()
 
 
-class PaymentCreateAPIView(CreateAPIView):
-    serializer_class = PaymentSerializer
-    queryset = Payments.objects.all()
-    # permission_classes = (AllowAny,)
+class UserListApiView(ListAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+
+
+class UserRetrieveApiView(RetrieveAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+
+
+class UserUpdateApiView(UpdateAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+
+
+class UserDestroyApiView(DestroyAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+
+
+class PayListAPIView(ListAPIView):
+    """Просмотр списка платежей с фильтрацией по курсу, уроку и способу оплаты,
+       и с сортировкой по дате(по умолчанию в модели сортировка по убыванию,
+       при запросе можно изменить с помощью -"""
+    serializer_class = PaySerializer
+    queryset = Pay.objects.all()
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = ('payed_course', 'payed_lesson', 'type_of_payment')
+    ordering_fields = ('date',)
+
+
+class PayCreateAPIView(CreateAPIView):
+    serializer_class = PaySerializer
+    queryset = Pay.objects.all()
 
     def perform_create(self, serializer):
-        payment = serializer.save(user=self.request.user)
-        stripe_product_id = create_stripe_product(payment)
-        amount_in_doll = convert_rub_to_dol(payment.payment_amount)
-        price = create_stripe_price(stripe_product_id, amount_in_doll)
+        pay = serializer.save(user=self.request.user)
+        product = create_stripe_product(product_name='new product')
+        price = create_stripe_price(product, pay.summ)
         session_id, payment_link = create_stripe_session(price)
 
-        payment.session_id = session_id
-        payment.payment_link = payment_link
-        payment.save()
+        pay.session_id = session_id
+        pay.link = payment_link
+        pay.save()
+
+
