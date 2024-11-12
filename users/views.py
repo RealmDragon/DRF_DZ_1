@@ -1,77 +1,62 @@
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.filters import SearchFilter, OrderingFilter
-from rest_framework.filters import SearchFilter
-from rest_framework.permissions import AllowAny
-from rest_framework.viewsets import ModelViewSet
-from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveAPIView, UpdateAPIView, DestroyAPIView
-from rest_framework import filters, serializers
-from users.models import User, Pay
-from users.serializer import UserSerializer, PaySerializer
-from users.services import create_stripe_session, create_stripe_product, create_stripe_price
+from requests import session
+from rest_framework import generics
+from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.permissions import IsAuthenticated
+
+from users.models import Payment, User
+from users.serializers import PaymentSerializer, UserSerializer
+from users.services import create_stripe_price, create_stripe_sessions, create_stripe_product
 
 
-class PayViewSet(ModelViewSet):
-    queryset = Pay.objects.all()
-    serializer_class = PaySerializer
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ('payed_course', 'payed_lesson', 'type_of_payment')
+class PaymentListAPIView(generics.ListAPIView):
+    serializer_class = PaymentSerializer
+    queryset = Payment.objects.all()
+    filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
+    filterset_fields = ('course', 'lesson', 'payment')
     ordering_fields = ('date',)
 
-
-class UserCreateApiView(CreateAPIView):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
-    permission_classes = (AllowAny,)
+class PaymentCreateAPIView(generics.CreateAPIView):
+    serializer_class = PaymentSerializer
+    queryset = Payment.objects.all()
 
     def perform_create(self, serializer):
-        user = serializer.save()
-        user.set_password(self.request.data.get('password'))
+        payment = serializer.save(user=self.request.user)
+        product_id = create_stripe_product(payment)
+        price = create_stripe_price(payment.amount, product_id)
+        session_id, payment_link = create_stripe_sessions(price)
+        payment.session_id = session_id
+        payment.link_to_payment = payment_link
+        payment.save()
+
+class UserCreateAPIView(generics.CreateAPIView):
+    serializer_class = UserSerializer
+    queryset = User.objects.all()
+
+    def perform_create(self, serializer):
+        user = serializer.save(is_active=True)
+        user.set_password(user.password)
         user.save()
 
 
-class UserListApiView(ListAPIView):
-    queryset = User.objects.all()
+class UserListAPIView(generics.ListAPIView):
     serializer_class = UserSerializer
-
-
-class UserRetrieveApiView(RetrieveAPIView):
     queryset = User.objects.all()
+    permission_classes = [IsAuthenticated]
+
+
+class UserRetrieveAPIView(generics.RetrieveAPIView):
     serializer_class = UserSerializer
-
-
-class UserUpdateApiView(UpdateAPIView):
     queryset = User.objects.all()
+    permission_classes = [IsAuthenticated]
+
+
+class UserUpdateAPIView(generics.UpdateAPIView):
     serializer_class = UserSerializer
-
-
-class UserDestroyApiView(DestroyAPIView):
     queryset = User.objects.all()
-    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]
 
 
-class PayListAPIView(ListAPIView):
-    """Просмотр списка платежей с фильтрацией по курсу, уроку и способу оплаты,
-       и с сортировкой по дате(по умолчанию в модели сортировка по убыванию,
-       при запросе можно изменить с помощью -"""
-    serializer_class = PaySerializer
-    queryset = Pay.objects.all()
-    filter_backends = [DjangoFilterBackend, OrderingFilter]
-    filterset_fields = ('payed_course', 'payed_lesson', 'type_of_payment')
-    ordering_fields = ('date',)
-
-
-class PayCreateAPIView(CreateAPIView):
-    serializer_class = PaySerializer
-    queryset = Pay.objects.all()
-
-    def perform_create(self, serializer):
-        pay = serializer.save(user=self.request.user)
-        product = create_stripe_product(product_name='new product')
-        price = create_stripe_price(product, pay.summ)
-        session_id, payment_link = create_stripe_session(price)
-
-        pay.session_id = session_id
-        pay.link = payment_link
-        pay.save()
-
-
+class UserDestroyAPIView(generics.DestroyAPIView):
+    queryset = User.objects.all()
+    permission_classes = [IsAuthenticated]
