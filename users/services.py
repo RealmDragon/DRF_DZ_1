@@ -4,9 +4,6 @@ from datetime import datetime, timedelta
 import stripe
 from django_celery_beat.models import IntervalSchedule, PeriodicTask
 
-stripe.api_key = "sk_test_51PwQ0DGtRQgxkxdjaPE1m9OP8k7C4ZFH5TuxxNFLYlXj42vlaQO3NxdxFWgs45EnukxLqGerHJNYBMp01NqiM4st006zReoYs3"
-
-
 def create_stripe_product(prod):
     """Создает продукт в страйпе"""
     product = prod.course if prod.course else prod.lesson
