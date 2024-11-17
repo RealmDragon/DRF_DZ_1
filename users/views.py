@@ -1,62 +1,68 @@
 from django_filters.rest_framework import DjangoFilterBackend
-from requests import session
-from rest_framework import generics
-from rest_framework.filters import OrderingFilter, SearchFilter
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.filters import OrderingFilter
+from rest_framework.generics import ListAPIView, CreateAPIView
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.viewsets import ModelViewSet
 
 from users.models import Payment, User
 from users.serializers import PaymentSerializer, UserSerializer
-from users.services import create_stripe_price, create_stripe_sessions, create_stripe_product
+from users.services import (
+    create_stripe_product,
+    create_stripe_price,
+    create_stripe_session,
+)
 
 
-class PaymentListAPIView(generics.ListAPIView):
+class UserModelViewSet(ModelViewSet):
+    """ViewSet управления пользователя"""
+
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+
+
+class PaymentListAPIView(ListAPIView):
+    """Эндпоинт просмотра оплаты"""
+
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_fields = (
+        "paid_course",
+        "paid_lesson",
+        "payment_method",
+    )
+    ordering_fields = ("date_payment",)
+
+
+class PaymentCreateAPIView(CreateAPIView):
+    """Эндпоинт создания оплаты"""
+
     serializer_class = PaymentSerializer
     queryset = Payment.objects.all()
-    filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
-    filterset_fields = ('course', 'lesson', 'payment')
-    ordering_fields = ('date',)
-
-class PaymentCreateAPIView(generics.CreateAPIView):
-    serializer_class = PaymentSerializer
-    queryset = Payment.objects.all()
+    permission_classes = (IsAuthenticated,)
 
     def perform_create(self, serializer):
-        payment = serializer.save(user=self.request.user)
-        product_id = create_stripe_product(payment)
-        price = create_stripe_price(payment.amount, product_id)
-        session_id, payment_link = create_stripe_sessions(price)
+        payment = serializer.save()
+        payment.user = self.request.user
+        stripe_product_id = create_stripe_product(payment)
+        payment.amount = payment.payment_sum
+        price = create_stripe_price(
+            stripe_product_id=stripe_product_id, amount=payment.amount
+        )
+        session_id, payment_link = create_stripe_session(price=price)
         payment.session_id = session_id
-        payment.link_to_payment = payment_link
+        payment.payment_url = payment_link
         payment.save()
 
-class UserCreateAPIView(generics.CreateAPIView):
+
+class UserCreateAPIView(CreateAPIView):
+    """Эндпоинт создания пользователя"""
+
     serializer_class = UserSerializer
     queryset = User.objects.all()
+    permission_classes = (AllowAny,)
 
     def perform_create(self, serializer):
         user = serializer.save(is_active=True)
         user.set_password(user.password)
         user.save()
-
-
-class UserListAPIView(generics.ListAPIView):
-    serializer_class = UserSerializer
-    queryset = User.objects.all()
-    permission_classes = [IsAuthenticated]
-
-
-class UserRetrieveAPIView(generics.RetrieveAPIView):
-    serializer_class = UserSerializer
-    queryset = User.objects.all()
-    permission_classes = [IsAuthenticated]
-
-
-class UserUpdateAPIView(generics.UpdateAPIView):
-    serializer_class = UserSerializer
-    queryset = User.objects.all()
-    permission_classes = [IsAuthenticated]
-
-
-class UserDestroyAPIView(generics.DestroyAPIView):
-    queryset = User.objects.all()
-    permission_classes = [IsAuthenticated]

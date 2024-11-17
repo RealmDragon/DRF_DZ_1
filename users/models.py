@@ -1,74 +1,76 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
-from college.models import NULLABLE
+from materials.models import Course, Lesson
+
+NULLABLE = {"blank": True, "null": True}
 
 
 class User(AbstractUser):
-    username = None
-    email = models.EmailField(unique=True,
-                              verbose_name='почта')
-    first_name = models.CharField(max_length=15,
-                                  verbose_name="имя",
-                                  **NULLABLE)
-    last_name = models.CharField(max_length=15,
-                                 verbose_name="фамилия",
-                                 **NULLABLE)
-    phone = models.CharField(max_length=35,
-                             verbose_name="телефон",
-                             **NULLABLE)
-    avatar = models.ImageField(upload_to='users/',
-                               verbose_name='аватар',
-                               **NULLABLE)
-    country = models.CharField(max_length=35,
-                               verbose_name='страна',
-                               **NULLABLE)
+    """
+    Модель пользователя с добавленными полями email, телефон, город и аватар.
+    """
 
-    USERNAME_FIELD = 'email'
+    username = None
+    email = models.EmailField(
+        unique=True, verbose_name="Почта", help_text="Укажите почту"
+    )
+    phone = models.CharField(
+        max_length=35, **NULLABLE, verbose_name="Телефон", help_text="Укажите телефон"
+    )
+    city = models.CharField(
+        max_length=50, **NULLABLE, verbose_name="Город", help_text="Укажите город"
+    )
+    avatar = models.ImageField(
+        upload_to="users/avatars",
+        **NULLABLE,
+        verbose_name="Аватар",
+        help_text="Загрузите аватар",
+    )
+
+    USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
 
-    def __str__(self):
-        return f'{self.email}'
-
     class Meta:
-        verbose_name = 'пользователь'
-        verbose_name_plural = 'пользователи'
+        verbose_name = "Пользователь"
+        verbose_name_plural = "Пользователи"
 
 
 class Payment(models.Model):
-    payment_tuple = (
-        ('cash', 'наличные'),
-        ('remittance', 'перевод на счет'),
+    """
+    Модель оплаты, связанная с пользователем и курсом/уроком.
+    """
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="payments",
+        verbose_name="пользователь",
     )
-    date = models.DateTimeField(verbose_name='дата и время оплаты', **NULLABLE)
-    amount = models.PositiveIntegerField(verbose_name='сумма оплаты')
-    payment = models.CharField(max_length=150,
-                               verbose_name='способ оплаты',
-                               choices=payment_tuple,
-                               **NULLABLE)
-
-    user = models.ForeignKey(User, on_delete=models.SET_NULL,
-                             verbose_name='пользователь',
-                             **NULLABLE)
-    course = models.ForeignKey('college.Course',
-                               on_delete=models.SET_NULL,
-                               **NULLABLE,
-                               verbose_name='оплаченный курс')
-    lesson = models.ForeignKey('college.Lesson',
-                               on_delete=models.SET_NULL,
-                               **NULLABLE,
-                               verbose_name='оплаченный урок')
-    session_id = models.CharField(max_length=255,
-                                  verbose_name='ID сессии',
-                                  **NULLABLE)
-    link_to_payment = models.URLField(max_length=400,
-                                      verbose_name='ссылка на оплату',
-                                      **NULLABLE)
-
-    def __str__(self):
-        return f'{self.user} - {self.amount}'
+    date = models.DateTimeField(auto_now_add=True, verbose_name="Дата оплаты")
+    paid_course = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        related_name="paid_course",
+        verbose_name="Оплаченный курс",
+        **NULLABLE,
+    )
+    paid_lesson = models.ForeignKey(
+        Lesson,
+        on_delete=models.CASCADE,
+        related_name="paid_lesson",
+        verbose_name="Оплаченный урок",
+        **NULLABLE,
+    )
+    payment_sum = models.PositiveIntegerField(verbose_name="Сумма оплаты", **NULLABLE)
+    payment_method = models.CharField(
+        max_length=50, verbose_name="Способ оплаты"
+    )
+    payment_url = models.URLField(max_length=450, verbose_name="Ссылка на оплату", **NULLABLE)
+    session_id = models.CharField(max_length=255, verbose_name="ID сессии", **NULLABLE)
 
     class Meta:
-        verbose_name = 'платеж'
-        verbose_name_plural = 'платежи'
-        ordering = ('-payment',)
+        verbose_name = "Оплата"
+        verbose_name_plural = "Оплаты"
+
+    def __str__(self):
+        return f"{self.user} - {self.paid_course if self.paid_course else self.paid_lesson}"

@@ -1,11 +1,9 @@
 FROM python:3.12-slim
 
-WORKDIR /code
+WORKDIR /app
 
-COPY pyproject.toml .
-RUN pip install --upgrade pip
-RUN pip install poetry
-RUN poetry config virtualenvs.create false
-RUN poetry install --no-root
+COPY /requirements.txt /
 
-COPY . .
+RUN pip install -r /requirements.txt --no-cache-dir
+
+COPY . ./

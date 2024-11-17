@@ -1,30 +1,33 @@
-import json
-from datetime import datetime, timedelta
-
 import stripe
-from django_celery_beat.models import IntervalSchedule, PeriodicTask
-
-def create_stripe_product(prod):
-    """Создает продукт в страйпе"""
-    product = prod.course if prod.course else prod.lesson
-    stripe_product = stripe.Product.create(name=product)
-    return stripe_product.get('id')
+from config.settings import STRIPE_API_KEY
 
 
-def create_stripe_price(amount, product_id):
-    """Создает цену в страйпе"""
+stripe.api_key = STRIPE_API_KEY
+
+
+def create_stripe_product(instance):
+    """Создаем stripe продукт"""
+    title_product = (
+        f"{instance.paid_course}" if instance.paid_course else f"{instance.paid_lesson}"
+    )
+    stripe_product = stripe.Product.create(name=f"{title_product}")
+    return stripe_product.get("id")
+
+
+def create_stripe_price(stripe_product_id, amount):
+    """Создаём stripe цену"""
     return stripe.Price.create(
-        currency="usd",
-        unit_amount=amount * 100,
-        product_data={"name": product_id},
+        currency="rub",
+        unit_amount=int(amount * 100),
+        product=stripe_product_id,
     )
 
 
-def create_stripe_sessions(price):
-    """Создает сессию на оплату в страйпе"""
+def create_stripe_session(price):
+    """Создаём stripe сессию"""
     session = stripe.checkout.Session.create(
-        success_url="http://127.0.0.1:8000/",
-        line_items=[{"price": price.get('id'), "quantity": 1}],
+        success_url="http://127.0.0.1:8000/users/payment",
+        line_items=[{"price": price.get("id"), "quantity": 1}],
         mode="payment",
     )
-    return session.get('id'), session.get('url')
+    return session.get("id"), session.get("url")
